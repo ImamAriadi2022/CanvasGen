@@ -1,7 +1,7 @@
-"""Outpainting engine pipeline module for CanvasGen.
+"""Modul engine outpainting untuk CanvasGen.
 
-Handles directional canvas expansion, border padding, mask synthesis,
-and outpainting pipeline execution.
+Menangani ekspansi kanvas berarah, pembuatan padding batas, sintesis mask biner,
+dan eksekusi pipeline outpainting.
 """
 
 from typing import Any, Dict, Optional, Tuple
@@ -16,18 +16,18 @@ logger = get_logger("CanvasGen.Engine.Outpaint")
 
 
 class OutpaintPipeline:
-    """Outpainting processor expanding image borders in specific directions."""
+    """Pemroses outpainting yang memperluas batas gambar ke arah tertentu."""
 
     def __init__(
         self,
         inpaint_pipeline: Optional[InpaintPipeline] = None,
         settings: Optional[Settings] = None,
     ) -> None:
-        """Initializes OutpaintPipeline with an InpaintPipeline and settings.
+        """Menginisialisasi OutpaintPipeline dengan InpaintPipeline dan settings.
 
         Args:
-            inpaint_pipeline: InpaintPipeline instance for performing seamless diffusion generation.
-            settings: Settings instance. If None, default settings are used.
+            inpaint_pipeline: Instance InpaintPipeline untuk generasi difusi.
+            settings: Instance Settings. Jika None, settings default digunakan.
         """
         self.settings = settings or get_settings()
         self.inpaint_engine = inpaint_pipeline or InpaintPipeline(settings=self.settings)
@@ -35,37 +35,37 @@ class OutpaintPipeline:
     def prepare_outpaint_canvas(
         self,
         image: Image.Image,
-        padding: Tuple[int, int, int, int],  # (left, top, right, bottom)
+        padding: Tuple[int, int, int, int],  # (kiri, atas, kanan, bawah)
     ) -> Tuple[Image.Image, Image.Image]:
-        """Expands canvas dimensions and creates corresponding binary outpainting mask.
+        """Memperluas dimensi kanvas dan membuat masker biner outpainting yang sesuai.
 
         Args:
-            image: Original PIL Image.
-            padding: Padding tuple in pixels (left, top, right, bottom).
+            image: Gambar PIL Image asli.
+            padding: Tuple padding piksel (kiri, atas, kanan, bawah).
 
         Returns:
-            Tuple of (expanded_image, generated_mask).
+            Tuple dari (gambar_diperluas, mask_dihasilkan).
         """
         left, top, right, bottom = padding
 
-        # Expand original image with black border padding
+        # Memperluas gambar asli dengan batas hitam
         expanded_image = ImageOps.expand(
             image,
             border=(left, top, right, bottom),
             fill=(0, 0, 0),
         )
 
-        # Create mask: White (255) for new padded areas, Black (0) for original content
+        # Membuat mask: Putih (255) untuk area padding baru, Hitam (0) untuk konten asli
         w, h = expanded_image.size
         mask = Image.new("L", (w, h), 255)
 
-        # Paste black rectangle over original image coordinates
+        # Menempelkan persegi panjang hitam di posisi gambar asli
         orig_w, orig_h = image.size
         black_orig = Image.new("L", (orig_w, orig_h), 0)
         mask.paste(black_orig, (left, top))
 
         logger.info(
-            "Canvas expanded from %s to %s with padding (L:%d, T:%d, R:%d, B:%d)",
+            "Kanvas diperluas dari %s menjadi %s dengan padding (Kiri:%d, Atas:%d, Kanan:%d, Bawah:%d)",
             image.size,
             expanded_image.size,
             left,
@@ -85,26 +85,26 @@ class OutpaintPipeline:
         guidance_scale: Optional[float] = None,
         seed: Optional[int] = None,
     ) -> Image.Image:
-        """Outpaints image borders based on directional pixel padding.
+        """Melakukan outpainting pada batas gambar berdasarkan padding piksel berarah.
 
         Args:
-            image: Original source PIL Image.
-            padding: Pixel expansion tuple (left, top, right, bottom).
-            prompt: Text prompt describing scene extensions.
-            negative_prompt: Negative guidance prompt.
-            num_inference_steps: Denoising sampling steps.
-            guidance_scale: CFG scale multiplier.
-            seed: Random seed integer.
+            image: Gambar sumber asli PIL Image.
+            padding: Tuple ekspansi piksel (kiri, atas, kanan, bawah).
+            prompt: Prompt teks deskripsi ekstensi pemandangan.
+            negative_prompt: Prompt negatif.
+            num_inference_steps: Langkah sampling denoising.
+            guidance_scale: Pengali skala CFG.
+            seed: Integer seed acak.
 
         Returns:
-            Outpainted PIL Image object.
+            Objek gambar hasil outpaint PIL Image.
         """
         canvas, mask = self.prepare_outpaint_canvas(image, padding)
 
         active_seed = set_seed(seed)
-        logger.info("Executing Outpaint generation for expanded canvas...")
+        logger.info("Mengeksekusi generasi Outpaint untuk kanvas yang diperluas...")
 
-        # Perform inpainting over the expanded canvas and generated mask
+        # Menjalankan inpainting di atas kanvas yang telah diperluas dan mask yang dihasilkan
         result = self.inpaint_engine.inpaint(
             image=canvas,
             mask_image=mask,

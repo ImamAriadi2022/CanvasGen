@@ -1,4 +1,4 @@
-"""High-level generation service encapsulating engine components for UI/API interaction."""
+"""Layanan generasi tingkat tinggi yang membungkus komponen engine untuk interaksi UI dan API."""
 
 from typing import Any, Dict, List, Optional, Tuple
 from PIL import Image
@@ -17,13 +17,13 @@ logger = get_logger("CanvasGen.Services.Generation")
 
 
 class GenerationService:
-    """Unified service layer encapsulating all CanvasGen AI generation operations."""
+    """Fasad layanan terpadu yang membungkus seluruh operasi generasi AI CanvasGen."""
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
-        """Initializes GenerationService components.
+        """Menginisialisasi komponen GenerationService.
 
         Args:
-            settings: Settings instance. Defaults to global settings if omitted.
+            settings: Instance Settings. Default ke settings global jika diabaikan.
         """
         self.settings = settings or get_settings()
         self.loader = ModelLoader(self.settings)
@@ -40,10 +40,10 @@ class GenerationService:
         device: Optional[str] = None,
         precision: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Loads target model pipeline into memory.
+        """Memuat pipeline model target ke dalam memori.
 
         Returns:
-            Dictionary containing loader info status.
+            Dictionary berisi status informasi loader.
         """
         self.loader.load_pipeline(model_id=model_id, device=device, precision=precision)
         return self.loader.get_info()
@@ -59,10 +59,10 @@ class GenerationService:
         seed: Optional[int] = None,
         save_output: bool = True,
     ) -> Tuple[Image.Image, Optional[str]]:
-        """Executes text-to-image synthesis and optionally persists output artifact.
+        """Mengeksekusi sintesis text-to-image dan secara opsional menyimpan artefak gambar.
 
         Returns:
-            Tuple of (generated_PIL_Image, saved_filepath_string).
+            Tuple dari (gambar_PIL_hasil, string_jalur_tersimpan).
         """
         img = self.generator.generate(
             prompt=prompt,
@@ -81,7 +81,7 @@ class GenerationService:
             )
             img.save(out_file)
             saved_path = str(out_file)
-            logger.info("Saved text-to-image artifact to: %s", saved_path)
+            logger.info("Menyimpan artefak text-to-image ke: %s", saved_path)
 
         return img, saved_path
 
@@ -92,10 +92,10 @@ class GenerationService:
         negative_prompt: str = "",
         save_outputs: bool = True,
     ) -> Tuple[List[Image.Image], List[str]]:
-        """Executes batch image generation.
+        """Mengeksekusi generasi gambar secara batch.
 
         Returns:
-            Tuple of (list_of_images, list_of_saved_filepaths).
+            Tuple dari (daftar_gambar, daftar_jalur_tersimpan).
         """
         images = self.generator.generate_batch(
             prompt=prompt,
@@ -114,11 +114,77 @@ class GenerationService:
 
         return images, saved_paths
 
-    def cleanup_resources(self) -> Dict[str, Any]:
-        """Unloads pipelines and flushes system VRAM.
+    def inpaint_image(
+        self,
+        image: Image.Image,
+        mask_image: Image.Image,
+        prompt: str,
+        negative_prompt: str = "",
+        seed: Optional[int] = None,
+        save_output: bool = True,
+    ) -> Tuple[Image.Image, Optional[str]]:
+        """Mengeksekusi inpainting pada area gambar yang bermasker.
 
         Returns:
-            Updated VRAM diagnostic stats dictionary.
+            Tuple dari (gambar_PIL_inpaint, string_jalur_tersimpan).
+        """
+        img = self.inpaint_pipeline.inpaint(
+            image=image,
+            mask_image=mask_image,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            seed=seed,
+        )
+
+        saved_path: Optional[str] = None
+        if save_output:
+            out_file = generate_output_path(
+                output_dir=self.settings.output_dir, prefix="inpaint"
+            )
+            img.save(out_file)
+            saved_path = str(out_file)
+            logger.info("Menyimpan artefak inpaint ke: %s", saved_path)
+
+        return img, saved_path
+
+    def outpaint_image(
+        self,
+        image: Image.Image,
+        padding: Tuple[int, int, int, int],
+        prompt: str,
+        negative_prompt: str = "",
+        seed: Optional[int] = None,
+        save_output: bool = True,
+    ) -> Tuple[Image.Image, Optional[str]]:
+        """Mengeksekusi outpainting untuk memperluas kanvas gambar.
+
+        Returns:
+            Tuple dari (gambar_PIL_outpaint, string_jalur_tersimpan).
+        """
+        img = self.outpaint_pipeline.outpaint(
+            image=image,
+            padding=padding,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            seed=seed,
+        )
+
+        saved_path: Optional[str] = None
+        if save_output:
+            out_file = generate_output_path(
+                output_dir=self.settings.output_dir, prefix="outpaint"
+            )
+            img.save(out_file)
+            saved_path = str(out_file)
+            logger.info("Menyimpan artefak outpaint ke: %s", saved_path)
+
+        return img, saved_path
+
+    def cleanup_resources(self) -> Dict[str, Any]:
+        """Melepaskan pipeline dan membersihkan VRAM sistem.
+
+        Returns:
+            Dictionary statistik diagnosa VRAM terbaru.
         """
         self.loader.unload_pipeline()
         flush_vram()

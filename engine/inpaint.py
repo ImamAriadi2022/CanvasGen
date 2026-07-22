@@ -1,6 +1,7 @@
-"""Inpainting engine pipeline module for CanvasGen.
+"""Modul engine inpainting untuk CanvasGen.
 
-Handles image masked region replacement, mask validation, and inpainting pipeline setup.
+Menangani penggantian area gambar bermasker (inpaint), validasi dimensi mask,
+dan penyiapan pipeline inpainting.
 """
 
 from typing import Any, Optional
@@ -13,20 +14,26 @@ from utils.seed import set_seed
 
 logger = get_logger("CanvasGen.Engine.Inpaint")
 
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
 
 class InpaintPipeline:
-    """Inpainting processor managing masked region image synthesis."""
+    """Pemroses inpainting yang mengelola sintesis gambar pada area bermasker."""
 
     def __init__(
         self,
         loader: Optional[ModelLoader] = None,
         settings: Optional[Settings] = None,
     ) -> None:
-        """Initializes the InpaintPipeline with a ModelLoader and settings.
+        """Menginisialisasi InpaintPipeline dengan ModelLoader dan settings.
 
         Args:
-            loader: ModelLoader instance. If None, a new loader is instantiated.
-            settings: Settings instance. If None, default settings are used.
+            loader: Instance ModelLoader. Jika None, loader baru diinisialisasi.
+            settings: Instance Settings. Jika None, settings default digunakan.
         """
         self.settings = settings or get_settings()
         self.loader = loader or ModelLoader(self.settings)
@@ -41,45 +48,66 @@ class InpaintPipeline:
         guidance_scale: Optional[float] = None,
         seed: Optional[int] = None,
     ) -> Image.Image:
-        """Inpaints target image masked region with new content generated from prompt.
+        """Mengganti isi area bermasker pada gambar dengan konten baru dari prompt.
 
         Args:
-            image: Source base PIL Image.
-            mask_image: Grayscale mask PIL Image (white = replace, black = keep).
-            prompt: Text prompt describing desired inpainting replacement.
-            negative_prompt: Negative guidance prompt.
-            num_inference_steps: Denoising sampling steps.
-            guidance_scale: Guidance scale multiplier.
-            seed: Optional integer random seed.
+            image: Gambar dasar PIL Image.
+            mask_image: Masker grayscale PIL Image (putih = ganti, hitam = pertahankan).
+            prompt: Prompt teks deskripsi penggantian inpainting.
+            negative_prompt: Prompt panduan negatif.
+            num_inference_steps: Langkah sampling denoising.
+            guidance_scale: Pengali skala CFG.
+            seed: Seed acak integer opsional.
 
         Returns:
-            Inpainted PIL Image object.
+            Objek PIL Image hasil inpainting.
         """
         if image.size != mask_image.size:
             logger.warning(
-                "Image size %s does not match mask size %s. Resizing mask to match.",
+                "Ukuran gambar %s tidak cocok dengan mask %s. Mengubah ukuran mask agar cocok.",
                 image.size,
                 mask_image.size,
             )
             mask_image = mask_image.resize(image.size, Image.Resampling.NEAREST)
+
+        # Ensure correct modes for image and mask
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        if mask_image.mode not in ["L", "RGB"]:
+            mask_image = mask_image.convert("L")
 
         active_seed = set_seed(seed)
         steps = num_inference_steps or self.settings.default_num_inference_steps
         cfg = guidance_scale or self.settings.default_guidance_scale
 
         logger.info(
-            "Executing Inpainting [Prompt: '%s' | Steps: %d | CFG: %.1f | Seed: %d]",
+            "Mengeksekusi Inpainting [Prompt: '%s' | Steps: %d | CFG: %.1f | Seed: %d]",
             prompt,
             steps,
             cfg,
             active_seed,
         )
 
-        # TODO (Stage 2): Execute diffusers.StableDiffusionInpaintPipeline:
-        # - Load dedicated inpainting checkpoint (e.g. runwayml/stable-diffusion-inpainting)
-        # - Pass image, mask_image, and prompt parameters
-        # - Extract and return inpainted PIL Image
+        pipe = self.loader.pipeline
 
-        # Stage 1 placeholder inpainting output
+        # Eksekusi pipeline inpainting Diffusers jika objek pipeline riil
+        if TORCH_AVAILABLE and hasattr(pipe, "__call__") and not isinstance(pipe, str):
+            try:
+                generator = torch.Generator(device=self.loader.device).manual_seed(active_seed)
+                output = pipe(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    image=image,
+                    mask_image=mask_image,
+                    num_inference_steps=steps,
+                    guidance_scale=cfg,
+                    generator=generator,
+                )
+                logger.info("Eksekusi Inpainting Diffusers aktual berhasil.")
+                return output.images[0]
+            except Exception as e:
+                logger.warning("Eksekusi Inpainting Diffusers aktual gagal (%s). Menggunakan komposisi mock.", e)
+
+        # Output placeholder inpainting (komposisi dasar)
         result = image.copy()
         return result

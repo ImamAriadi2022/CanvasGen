@@ -1,7 +1,8 @@
-"""Model loading engine module for CanvasGen.
+"""Modul engine pemuat model (Model Loader) untuk CanvasGen.
 
-Handles Stable Diffusion model loading, device placement, precision casting,
-and HuggingFace authentication token integration.
+Mengelola pemuatan model Stable Diffusion, penempatan perangkat (cuda/cpu/mps),
+pemetaan presisi (fp16/fp32/bf16), token autentikasi HuggingFace,
+dan optimasi memori VRAM.
 """
 
 from typing import Any, Dict, Optional
@@ -10,21 +11,45 @@ from utils.logger import get_logger
 
 logger = get_logger("CanvasGen.Engine.Loader")
 
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+try:
+    import diffusers
+    from diffusers import StableDiffusionPipeline, StableDiffusionInpaintPipeline
+    DIFFUSERS_AVAILABLE = True
+except ImportError:
+    DIFFUSERS_AVAILABLE = False
+
 
 class ModelLoader:
-    """Manages loading, caching, and unloading of Diffusion pipelines."""
+    """Pengelola pemuatan, penyiapan cache, dan pelepasan pipeline difusi."""
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
-        """Initializes the ModelLoader instance with settings configuration.
+        """Menginisialisasi instance ModelLoader dengan konfigurasi settings.
 
         Args:
-            settings: Optional Settings object. If None, default settings are retrieved.
+            settings: Objek Settings opsional. Jika None, konfigurasi default akan digunakan.
         """
         self.settings = settings or get_settings()
         self.active_model_id: Optional[str] = None
         self.pipeline: Optional[Any] = None
         self.device: str = self.settings.device
         self.precision: str = self.settings.precision
+
+    def _resolve_dtype(self, precision_str: str) -> Any:
+        """Memetakan string presisi menjadi torch.dtype."""
+        if not TORCH_AVAILABLE:
+            return None
+        p = precision_str.lower()
+        if p in ["fp16", "float16"]:
+            return torch.float16
+        elif p in ["bf16", "bfloat16"]:
+            return torch.bfloat16
+        return torch.float32
 
     def load_pipeline(
         self,
@@ -33,56 +58,83 @@ class ModelLoader:
         precision: Optional[str] = None,
         use_auth_token: Optional[str] = None,
     ) -> Any:
-        """Loads a StableDiffusionPipeline or related diffusion pipeline.
+        """Memuat StableDiffusionPipeline atau pipeline difusi yang relevan.
 
         Args:
-            model_id: Model repository path or ID on HuggingFace.
-            device: Hardware target device ('cuda', 'cpu', 'mps').
-            precision: Target dtype precision ('fp16', 'fp32', 'bf16').
-            use_auth_token: HuggingFace user authentication token.
+            model_id: ID repository HuggingFace atau jalur model lokal.
+            device: Perangkat target ('cuda', 'cpu', 'mps').
+            precision: Presisi data dtype ('fp16', 'fp32', 'bf16').
+            use_auth_token: Token autentikasi pengguna HuggingFace.
 
         Returns:
-            Loaded pipeline instance placeholder (Stage 2 implementation).
+            Instance pipeline difusi yang dimuat atau objek fallback.
         """
         target_model = model_id or self.settings.model_id
         target_device = device or self.device
         target_precision = precision or self.precision
         auth_token = use_auth_token or self.settings.hf_token
 
+        # Penyesuaian otomatis jika CUDA tidak tersedia
+        if TORCH_AVAILABLE and target_device == "cuda" and not torch.cuda.is_available():
+            logger.warning("CUDA tidak tersedia di sistem ini. Beralih ke CPU.")
+            target_device = "cpu"
+
         logger.info(
-            "Preparing pipeline load for model: '%s' on device: '%s' with precision: '%s'",
+            "Menyiapkan pemuatan pipeline [Model: '%s' | Perangkat: '%s' | Presisi: '%s']",
             target_model,
             target_device,
             target_precision,
         )
 
-        # TODO (Stage 2): Implement diffusers.StableDiffusionPipeline.from_pretrained loading logic.
-        # - Map target_precision ('fp16' -> torch.float16, 'fp32' -> torch.float32)
-        # - Pass auth_token for gated repositories
-        # - Enable attention slicing or xformers memory efficient attention if requested
-        # - Move pipeline to target_device
+        torch_dtype = self._resolve_dtype(target_precision)
 
+        if DIFFUSERS_AVAILABLE and TORCH_AVAILABLE:
+            try:
+                kwargs: Dict[str, Any] = {"torch_dtype": torch_dtype}
+                if auth_token:
+                    kwargs["use_auth_token"] = auth_token
+                if not self.settings.safety_checker:
+                    kwargs["safety_checker"] = None
+
+                logger.info("Memuat StableDiffusionPipeline dari repo: %s", target_model)
+                pipe = StableDiffusionPipeline.from_pretrained(target_model, **kwargs)
+                pipe.to(target_device)
+
+                # Optimasi memori
+                if hasattr(pipe, "enable_attention_slicing"):
+                    pipe.enable_attention_slicing()
+
+                self.pipeline = pipe
+                self.active_model_id = target_model
+                self.device = target_device
+                self.precision = target_precision
+                logger.info("Pipeline Diffusers '%s' berhasil dimuat ke perangkat %s.", target_model, target_device)
+                return self.pipeline
+            except Exception as e:
+                logger.warning("Pemuatan Diffusers aktual gagal/offline (%s). Menggunakan mode PipelineMock.", e)
+
+        # Fallback mode jika Diffusers/PyTorch belum mengunduh model lokal
         self.active_model_id = target_model
+        self.device = target_device
+        self.precision = target_precision
         self.pipeline = f"PipelineMock[{target_model}]"
-        logger.info("Pipeline '%s' registered successfully (Stage 1 Skeleton).", target_model)
-
+        logger.info("Pipeline '%s' berhasil terdaftar (Mode Mock Engine).", target_model)
         return self.pipeline
 
     def unload_pipeline(self) -> None:
-        """Unloads current pipeline from device memory and triggers VRAM cleanup."""
+        """Melepaskan pipeline aktif dari memori perangkat dan menghapus referensi."""
         if self.pipeline is not None:
-            logger.info("Unloading pipeline: '%s'", self.active_model_id)
+            logger.info("Melepaskan pipeline: '%s'", self.active_model_id)
             self.pipeline = None
             self.active_model_id = None
-            # TODO (Stage 2): Invoke utils.memory.flush_vram() after deleting pipeline object
         else:
-            logger.warning("No active pipeline to unload.")
+            logger.warning("Tidak ada pipeline aktif yang dapat dilepas.")
 
     def get_info(self) -> Dict[str, Any]:
-        """Returns metadata regarding active pipeline and system configuration.
+        """Mengembalikan metadata mengenai pipeline aktif dan konfigurasi sistem.
 
         Returns:
-            Dictionary containing model_id, device, precision, and loaded status.
+            Dictionary berisi active_model_id, device, precision, dan status is_loaded.
         """
         return {
             "active_model_id": self.active_model_id,

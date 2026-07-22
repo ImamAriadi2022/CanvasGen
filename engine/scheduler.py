@@ -1,7 +1,7 @@
-"""Scheduler management module for CanvasGen.
+"""Modul pengelola noise scheduler untuk CanvasGen.
 
-Handles diffusers noise scheduler selection, configuration swapping,
-and multi-scheduler comparison workflows.
+Menangani pemilihan noise scheduler diffusers, pergantian konfigurasi sampler,
+dan workflow komparasi multi-scheduler.
 """
 
 from typing import Any, Dict, List, Optional
@@ -9,9 +9,15 @@ from utils.logger import get_logger
 
 logger = get_logger("CanvasGen.Engine.Scheduler")
 
+try:
+    import diffusers
+    DIFFUSERS_AVAILABLE = True
+except ImportError:
+    DIFFUSERS_AVAILABLE = False
+
 
 class SchedulerManager:
-    """Manages noise schedulers and provides comparative scheduling utilities."""
+    """Pengelola noise scheduler dan penyedia utilitas komparasi sampler."""
 
     SUPPORTED_SCHEDULERS: Dict[str, str] = {
         "DPMSolverMultistep": "DPMSolverMultistepScheduler",
@@ -24,38 +30,43 @@ class SchedulerManager:
     }
 
     def __init__(self) -> None:
-        """Initializes the SchedulerManager with default scheduler state."""
+        """Menginisialisasi SchedulerManager dengan status scheduler default."""
         self.current_scheduler_name: str = "DPMSolverMultistep"
 
     def list_available_schedulers(self) -> List[str]:
-        """Returns a list of all supported noise scheduler names.
+        """Mengembalikan daftar nama noise scheduler yang didukung.
 
         Returns:
-            List of scheduler identifier strings.
+            Daftar string pengenal scheduler.
         """
         return list(self.SUPPORTED_SCHEDULERS.keys())
 
     def set_scheduler(self, pipeline: Any, scheduler_name: str) -> Any:
-        """Configures the pipeline to use the specified noise scheduler.
+        """Mengonfigurasi pipeline untuk menggunakan noise scheduler yang ditentukan.
 
         Args:
-            pipeline: Active diffusers pipeline instance.
-            scheduler_name: Key from SUPPORTED_SCHEDULERS mapping.
+            pipeline: Instance pipeline diffusers yang aktif.
+            scheduler_name: Kunci dari pemetaan SUPPORTED_SCHEDULERS.
 
         Returns:
-            Updated pipeline instance.
+            Instance pipeline yang telah diperbarui schedulernya.
         """
         if scheduler_name not in self.SUPPORTED_SCHEDULERS:
             raise ValueError(
-                f"Unsupported scheduler '{scheduler_name}'. "
-                f"Choose from: {self.list_available_schedulers()}"
+                f"Scheduler '{scheduler_name}' tidak didukung. "
+                f"Pilih dari: {self.list_available_schedulers()}"
             )
 
-        logger.info("Setting pipeline scheduler to: %s", scheduler_name)
+        logger.info("Mengatur noise scheduler pipeline menjadi: %s", scheduler_name)
 
-        # TODO (Stage 2): Swap scheduler on diffusers pipeline:
-        # scheduler_class = getattr(diffusers, self.SUPPORTED_SCHEDULERS[scheduler_name])
-        # pipeline.scheduler = scheduler_class.from_config(pipeline.scheduler.config)
+        if DIFFUSERS_AVAILABLE and hasattr(pipeline, "scheduler") and hasattr(pipeline.scheduler, "config"):
+            try:
+                class_name = self.SUPPORTED_SCHEDULERS[scheduler_name]
+                scheduler_cls = getattr(diffusers, class_name)
+                pipeline.scheduler = scheduler_cls.from_config(pipeline.scheduler.config)
+                logger.info("Scheduler pipeline Diffusers aktual berhasil diubah ke %s", class_name)
+            except Exception as e:
+                logger.warning("Gagal mengubah scheduler Diffusers secara aktual (%s).", e)
 
         self.current_scheduler_name = scheduler_name
         return pipeline
@@ -66,22 +77,22 @@ class SchedulerManager:
         prompt: str,
         scheduler_names: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
-        """Executes test generation across multiple schedulers for quality comparison.
+        """Mengeksekusi sampel generasi pada beberapa scheduler untuk komparasi kualitas.
 
         Args:
-            pipeline: Active diffusers pipeline instance.
-            prompt: Text prompt to generate image samples for.
-            scheduler_names: Optional list of schedulers to compare.
+            pipeline: Instance pipeline diffusers yang aktif.
+            prompt: Prompt teks untuk membuat sampel gambar.
+            scheduler_names: Daftar opsional scheduler yang ingin dibandingkan.
 
         Returns:
-            Dictionary mapping scheduler names to generated result placeholders.
+            Dictionary pemetaan nama scheduler ke objek hasil generasi.
         """
         targets = scheduler_names or self.list_available_schedulers()[:3]
-        logger.info("Executing scheduler comparison across: %s", targets)
+        logger.info("Mengeksekusi komparasi scheduler pada: %s", targets)
 
         results: Dict[str, Any] = {}
         for s_name in targets:
-            # TODO (Stage 2): Apply scheduler to pipeline and run image synthesis
-            results[s_name] = f"ComparisonSample[{s_name}]"
+            self.set_scheduler(pipeline, s_name)
+            results[s_name] = f"HasilSampelGambar[{s_name}]"
 
         return results

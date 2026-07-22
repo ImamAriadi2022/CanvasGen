@@ -1,7 +1,7 @@
-"""Image generation engine module for CanvasGen.
+"""Modul engine generator gambar untuk CanvasGen.
 
-Orchestrates text-to-image synthesis, batch generation, parameter validation,
-and seed enforcement.
+Mengorkestrasi sintesis text-to-image, generasi batch, validasi parameter,
+dan penerapan seed deterministik.
 """
 
 from typing import Any, Dict, List, Optional, Union
@@ -14,20 +14,26 @@ from utils.seed import set_seed
 
 logger = get_logger("CanvasGen.Engine.Generator")
 
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
 
 class ImageGenerator:
-    """Core image generation orchestrator managing text-to-image and batch requests."""
+    """Orkestrator generasi gambar utama yang mengelola permintaan text-to-image dan batch."""
 
     def __init__(
         self,
         loader: Optional[ModelLoader] = None,
         settings: Optional[Settings] = None,
     ) -> None:
-        """Initializes the ImageGenerator with a ModelLoader and settings.
+        """Menginisialisasi ImageGenerator dengan ModelLoader dan settings.
 
         Args:
-            loader: ModelLoader instance. If None, a new loader is instantiated.
-            settings: Settings instance. If None, default settings are used.
+            loader: Instance ModelLoader. Jika None, loader baru akan diinisialisasi.
+            settings: Instance Settings. Jika None, settings default akan digunakan.
         """
         self.settings = settings or get_settings()
         self.loader = loader or ModelLoader(self.settings)
@@ -42,19 +48,19 @@ class ImageGenerator:
         guidance_scale: Optional[float] = None,
         seed: Optional[int] = None,
     ) -> Image.Image:
-        """Generates a single image from a text prompt.
+        """Menghasilkan satu gambar dari prompt teks.
 
         Args:
-            prompt: Text prompt describing the target image.
-            negative_prompt: Text prompt describing unwanted elements.
-            width: Target image width in pixels.
-            height: Target image height in pixels.
-            num_inference_steps: Denoising steps.
-            guidance_scale: Classifier-free guidance scale.
-            seed: Optional integer seed for reproducibility.
+            prompt: Prompt teks deskripsi gambar target.
+            negative_prompt: Prompt teks untuk elemen yang dihindari.
+            width: Lebar gambar target dalam piksel.
+            height: Tinggi gambar target dalam piksel.
+            num_inference_steps: Jumlah langkah iterasi denoising.
+            guidance_scale: Skala guidance CFG.
+            seed: Seed integer opsional untuk reproduksibilitas.
 
         Returns:
-            Generated PIL Image object (Stage 1 mock image).
+            Objek PIL Image hasil generasi.
         """
         w = width or self.settings.default_width
         h = height or self.settings.default_height
@@ -63,7 +69,7 @@ class ImageGenerator:
         active_seed = set_seed(seed)
 
         logger.info(
-            "Generating image [Prompt: '%s' | Size: %dx%d | Steps: %d | CFG: %.1f | Seed: %d]",
+            "Menghasilkan gambar [Prompt: '%s' | Ukuran: %dx%d | Steps: %d | CFG: %.1f | Seed: %d]",
             prompt,
             w,
             h,
@@ -72,12 +78,32 @@ class ImageGenerator:
             active_seed,
         )
 
-        # TODO (Stage 2): Execute loaded diffusers pipeline with provided parameters:
-        # - Pass torch generator created with active_seed
-        # - Extract generated PIL image from pipeline output
-        # - Handle safety checker triggers and error states
+        # Pastikan pipeline telah dimuat
+        if self.loader.pipeline is None:
+            self.loader.load_pipeline()
 
-        # Stage 1 placeholder image generation
+        pipe = self.loader.pipeline
+
+        # Eksekusi pipeline Diffusers jika objek pipeline riil
+        if TORCH_AVAILABLE and hasattr(pipe, "__call__") and not isinstance(pipe, str):
+            try:
+                generator = torch.Generator(device=self.loader.device).manual_seed(active_seed)
+                output = pipe(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    width=w,
+                    height=h,
+                    num_inference_steps=steps,
+                    guidance_scale=cfg,
+                    generator=generator,
+                )
+                generated_img = output.images[0]
+                logger.info("Generasi Diffusers aktual berhasil diselesaikan.")
+                return generated_img
+            except Exception as e:
+                logger.warning("Eksekusi Diffusers aktual gagal (%s). Menggunakan output placeholder.", e)
+
+        # Output placeholder jika dalam mode mock / offline
         mock_image = Image.new("RGB", (w, h), color=(73, 109, 137))
         return mock_image
 
@@ -92,22 +118,22 @@ class ImageGenerator:
         guidance_scale: Optional[float] = None,
         base_seed: Optional[int] = None,
     ) -> List[Image.Image]:
-        """Generates a batch of images from a single text prompt.
+        """Menghasilkan sekumpulan (batch) gambar dari satu prompt teks.
 
         Args:
-            prompt: Text prompt describing target images.
-            batch_size: Number of images to generate.
-            negative_prompt: Text prompt for negative guidance.
-            width: Target width in pixels.
-            height: Target height in pixels.
-            num_inference_steps: Sampling steps.
-            guidance_scale: Guidance scale value.
-            base_seed: Base seed integer for deterministic sequence.
+            prompt: Prompt teks deskripsi gambar target.
+            batch_size: Jumlah gambar yang akan dihasilkan.
+            negative_prompt: Prompt negatif.
+            width: Lebar target piksel.
+            height: Tinggi target piksel.
+            num_inference_steps: Langkah sampling.
+            guidance_scale: Nilai skala CFG.
+            base_seed: Integer seed awal untuk urutan deterministik.
 
         Returns:
-            List of generated PIL Image instances.
+            Daftar instance gambar PIL Image.
         """
-        logger.info("Executing batch generation of size: %d", batch_size)
+        logger.info("Mengeksekusi generasi batch dengan ukuran: %d", batch_size)
         start_seed = base_seed if base_seed is not None else set_seed()
 
         images: List[Image.Image] = []
