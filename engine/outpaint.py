@@ -116,3 +116,37 @@ class OutpaintPipeline:
         )
 
         return result
+
+    def zoom_out(
+        self,
+        image: Image.Image,
+        zoom_factor: float = 1.5,
+        prompt: str = "",
+        negative_prompt: str = "",
+        seed: Optional[int] = None,
+    ) -> Image.Image:
+        """Melakukan outpainting progresif (zoom out) untuk memperluas kanvas ke segala arah secara proporsional.
+
+        Args:
+            image: Gambar sumber asli.
+            zoom_factor: Faktor pengali zoom out (misalnya 1.5x).
+            prompt: Prompt deskripsi area luar.
+            negative_prompt: Prompt negatif.
+            seed: Seed integer.
+
+        Returns:
+            Objek PIL Image hasil zoom out.
+        """
+        w, h = image.size
+        pad_x = int((w * (zoom_factor - 1.0)) / 2)
+        pad_y = int((h * (zoom_factor - 1.0)) / 2)
+        padding = (pad_x, pad_y, pad_x, pad_y)
+
+        logger.info("Executing progressive zoom_out (factor: %.2f, padding: %s)", zoom_factor, padding)
+        return self.outpaint(
+            image=image,
+            padding=padding,
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            seed=seed,
+        )

@@ -1,10 +1,6 @@
-"""Modul engine generator gambar untuk CanvasGen.
+"""Image Generator Engine for CanvasGen supporting Text-to-Image and Batch synthesis via Diffusers."""
 
-Mengorkestrasi sintesis text-to-image, generasi batch, validasi parameter,
-dan penerapan seed deterministik.
-"""
-
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 from PIL import Image
 
 from config.settings import Settings, get_settings
@@ -22,19 +18,14 @@ except ImportError:
 
 
 class ImageGenerator:
-    """Orkestrator generasi gambar utama yang mengelola permintaan text-to-image dan batch."""
+    """Orchestrates real Stable Diffusion image generation for simple, advanced, and batch requests."""
 
     def __init__(
         self,
         loader: Optional[ModelLoader] = None,
         settings: Optional[Settings] = None,
     ) -> None:
-        """Menginisialisasi ImageGenerator dengan ModelLoader dan settings.
-
-        Args:
-            loader: Instance ModelLoader. Jika None, loader baru akan diinisialisasi.
-            settings: Instance Settings. Jika None, settings default akan digunakan.
-        """
+        """Initializes ImageGenerator with ModelLoader singleton and Settings."""
         self.settings = settings or get_settings()
         self.loader = loader or ModelLoader(self.settings)
 
@@ -48,19 +39,10 @@ class ImageGenerator:
         guidance_scale: Optional[float] = None,
         seed: Optional[int] = None,
     ) -> Image.Image:
-        """Menghasilkan satu gambar dari prompt teks.
+        """Generates a single image from text prompt using StableDiffusionPipeline.
 
-        Args:
-            prompt: Prompt teks deskripsi gambar target.
-            negative_prompt: Prompt teks untuk elemen yang dihindari.
-            width: Lebar gambar target dalam piksel.
-            height: Tinggi gambar target dalam piksel.
-            num_inference_steps: Jumlah langkah iterasi denoising.
-            guidance_scale: Skala guidance CFG.
-            seed: Seed integer opsional untuk reproduksibilitas.
-
-        Returns:
-            Objek PIL Image hasil generasi.
+        Raises:
+            RuntimeError: If execution fails or pipeline is unavailable.
         """
         w = width or self.settings.default_width
         h = height or self.settings.default_height
@@ -69,7 +51,7 @@ class ImageGenerator:
         active_seed = set_seed(seed)
 
         logger.info(
-            "Menghasilkan gambar [Prompt: '%s' | Ukuran: %dx%d | Steps: %d | CFG: %.1f | Seed: %d]",
+            "Generating image [Prompt: '%s' | Size: %dx%d | Steps: %d | CFG: %.1f | Seed: %d]",
             prompt,
             w,
             h,
@@ -78,15 +60,10 @@ class ImageGenerator:
             active_seed,
         )
 
-        # Pastikan pipeline telah dimuat
-        if self.loader.pipeline is None:
-            self.loader.load_pipeline()
+        pipe = self.loader.load_pipeline()
 
-        pipe = self.loader.pipeline
-
-        # Eksekusi pipeline Diffusers jika objek pipeline riil
-        if TORCH_AVAILABLE and hasattr(pipe, "__call__") and not isinstance(pipe, str):
-            try:
+        try:
+            if hasattr(pipe, "__call__") and TORCH_AVAILABLE:
                 generator = torch.Generator(device=self.loader.device).manual_seed(active_seed)
                 output = pipe(
                     prompt=prompt,
@@ -97,15 +74,67 @@ class ImageGenerator:
                     guidance_scale=cfg,
                     generator=generator,
                 )
-                generated_img = output.images[0]
-                logger.info("Generasi Diffusers aktual berhasil diselesaikan.")
-                return generated_img
-            except Exception as e:
-                logger.warning("Eksekusi Diffusers aktual gagal (%s). Menggunakan output placeholder.", e)
+                logger.info("Stable Diffusion Text-to-Image inference successful.")
+                return output.images[0]
+            elif hasattr(pipe, "__call__"):
+                output = pipe(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    width=w,
+                    height=h,
+                    num_inference_steps=steps,
+                    guidance_scale=cfg,
+                )
+                logger.info("Stable Diffusion Text-to-Image inference successful.")
+                return output.images[0]
+            else:
+                raise RuntimeError("Stable Diffusion pipeline is not callable.")
+        except Exception as e:
+            logger.error("Stable Diffusion generation failed: %s", e)
+            raise e
 
-        # Output placeholder jika dalam mode mock / offline
-        mock_image = Image.new("RGB", (w, h), color=(73, 109, 137))
-        return mock_image
+    def generate_simple_image(
+        self,
+        prompt: str,
+        negative_prompt: str = "",
+        seed: Optional[int] = None,
+    ) -> Image.Image:
+        """Required Dicoding simple image generation function returning PIL.Image."""
+        return self.generate(prompt=prompt, negative_prompt=negative_prompt, seed=seed)
+
+    def generate_advanced_image(
+        self,
+        prompt: str,
+        negative_prompt: str = "",
+        guidance_scale: Optional[float] = None,
+        num_inference_steps: Optional[int] = None,
+        scheduler_name: Optional[str] = None,
+        seed: Optional[int] = None,
+        num_images: int = 1,
+    ) -> List[Image.Image]:
+        """Required Dicoding advanced image generation function returning List[PIL.Image]."""
+        if scheduler_name and self.loader.pipeline:
+            from engine.scheduler import SchedulerManager
+            SchedulerManager().set_scheduler(self.loader.pipeline, scheduler_name)
+
+        if num_images == 1:
+            img = self.generate(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                guidance_scale=guidance_scale,
+                num_inference_steps=num_inference_steps,
+                seed=seed,
+            )
+            return [img]
+        else:
+            return self.generate_batch(
+                prompt=prompt,
+                batch_size=num_images,
+                negative_prompt=negative_prompt,
+                guidance_scale=guidance_scale,
+                num_inference_steps=num_inference_steps,
+                base_seed=seed,
+            )
 
     def generate_batch(
         self,
@@ -118,23 +147,9 @@ class ImageGenerator:
         guidance_scale: Optional[float] = None,
         base_seed: Optional[int] = None,
     ) -> List[Image.Image]:
-        """Menghasilkan sekumpulan (batch) gambar dari satu prompt teks.
-
-        Args:
-            prompt: Prompt teks deskripsi gambar target.
-            batch_size: Jumlah gambar yang akan dihasilkan.
-            negative_prompt: Prompt negatif.
-            width: Lebar target piksel.
-            height: Tinggi target piksel.
-            num_inference_steps: Langkah sampling.
-            guidance_scale: Nilai skala CFG.
-            base_seed: Integer seed awal untuk urutan deterministik.
-
-        Returns:
-            Daftar instance gambar PIL Image.
-        """
-        logger.info("Mengeksekusi generasi batch dengan ukuran: %d", batch_size)
-        start_seed = base_seed if base_seed is not None else set_seed()
+        """Generates a batch of images from text prompt with sequential seeds."""
+        logger.info("Executing batch generation with size: %d", batch_size)
+        start_seed = base_seed if (base_seed is not None and base_seed != -1) else set_seed()
 
         images: List[Image.Image] = []
         for i in range(batch_size):

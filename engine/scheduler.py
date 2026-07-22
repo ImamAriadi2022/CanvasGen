@@ -21,8 +21,10 @@ class SchedulerManager:
 
     SUPPORTED_SCHEDULERS: Dict[str, str] = {
         "DPMSolverMultistep": "DPMSolverMultistepScheduler",
+        "DPM++": "DPMSolverMultistepScheduler",
         "EulerDiscrete": "EulerDiscreteScheduler",
         "EulerAncestralDiscrete": "EulerAncestralDiscreteScheduler",
+        "Euler A": "EulerAncestralDiscreteScheduler",
         "DDIM": "DDIMScheduler",
         "LMSDiscrete": "LMSDiscreteScheduler",
         "PNDM": "PNDMScheduler",

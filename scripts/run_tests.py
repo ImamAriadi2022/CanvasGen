@@ -27,28 +27,38 @@ def check_syntax() -> bool:
     return success
 
 
-def check_notebook() -> bool:
-    """Memapar colab.ipynb untuk memverifikasi struktur JSON yang valid.
+def check_notebooks() -> bool:
+    """Memapar seluruh file notebook untuk memverifikasi struktur JSON nbformat v4 yang valid.
 
     Returns:
-        True jika JSON notebook valid, False jika sebaliknya.
+        True jika seluruh JSON notebook valid, False jika sebaliknya.
     """
-    print("\n[2/4] Memvalidasi Struktur Notebook Google Colab...")
-    nb_path = BASE_DIR / "notebooks" / "colab.ipynb"
-    if not nb_path.exists():
-        print(f" -> [FAIL] File notebook tidak ditemukan di {nb_path}")
-        return False
+    print("\n[2/4] Memvalidasi Struktur Notebook Proyek & Submisi...")
+    notebook_paths = [
+        BASE_DIR / "notebooks" / "local_demo.ipynb",
+        BASE_DIR / "notebooks" / "colab.ipynb",
+        BASE_DIR / "submit" / "Pipeline_submission_BFGAI_Imam.ipynb",
+        BASE_DIR / "submit" / "Streamlit_submission_BFGAI_Imam.ipynb",
+    ]
 
-    try:
-        with open(nb_path, "r", encoding="utf-8") as f:
-            nb_data = json.load(f)
-        assert "cells" in nb_data
-        assert nb_data.get("nbformat") == 4
-        print(" -> [OK] Pemeriksaan Notebook Lulus: colab.ipynb adalah JSON nbformat v4 yang valid.")
-        return True
-    except Exception as e:
-        print(f" -> [FAIL] Kesalahan Validasi Notebook: {e}")
-        return False
+    all_ok = True
+    for nb_path in notebook_paths:
+        if not nb_path.exists():
+            print(f" -> [FAIL] File notebook tidak ditemukan: {nb_path.name}")
+            all_ok = False
+            continue
+
+        try:
+            with open(nb_path, "r", encoding="utf-8") as f:
+                nb_data = json.load(f)
+            assert "cells" in nb_data
+            assert nb_data.get("nbformat") == 4
+            print(f" -> [OK] Valid: {nb_path.name}")
+        except Exception as e:
+            print(f" -> [FAIL] Kesalahan Validasi Notebook {nb_path.name}: {e}")
+            all_ok = False
+
+    return all_ok
 
 
 def run_unit_tests() -> bool:
@@ -80,26 +90,26 @@ def run_unit_tests() -> bool:
 
 def print_environment_summary():
     """Mencetak ringkasan kesiapan lingkungan."""
-    print("\n[4/4] Membuat Ringkasan Verifikasi Tahap 1...")
+    print("\n[4/4] Membuat Ringkasan Verifikasi CanvasGen...")
     print("=========================================================")
-    print("               LAPORAN CANVASGEN TAHAP 1                 ")
+    print("           LAPORAN DUAL OBJECTIVE CANVASGEN              ")
     print("=========================================================")
-    print("• Struktur Proyek   : Terverifikasi Lengkap")
-    print("• Config & Settings : Pydantic / Dataclass Siap")
-    print("• Modul Engine      : PEP8, Type Hints, Skeleton Siap")
+    print("• Struktur Proyek   : Produksi & Folder submit/ Siap")
+    print("• Config & Settings : Pydantic / Dataclass Terverifikasi")
+    print("• Modul Engine      : Diffusers, Inpaint, Outpaint Siap")
     print("• Modul Utilitas     : Image, Memory, Seed, Logger, File System")
-    print("• Aplikasi Web      : Streamlit app.py Berfungsi")
-    print("• Notebook Colab    : colab.ipynb Terverifikasi Valid")
+    print("• Notebook Proyek   : local_demo.ipynb & colab.ipynb Valid")
+    print("• Folder Submisi    : submit/ Lengkap & Siap Di-zip")
     print("• Pengujian Unit    : 100% Lulus")
     print("=========================================================")
-    print("KESIAPAN TAHAP 2: CANVASGEN SIAP UNTUK TAHAP 2!")
+    print("KESIAPAN: CANVASGEN SIAP UNTUK SUBMISI DICODING & STAGE 2!")
     print("=========================================================\n")
 
 
 def main():
     """Titik masuk utama eksekusi verifikasi."""
     syntax_ok = check_syntax()
-    nb_ok = check_notebook()
+    nb_ok = check_notebooks()
     tests_ok = run_unit_tests()
 
     if syntax_ok and nb_ok and tests_ok:

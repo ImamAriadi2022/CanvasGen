@@ -1,8 +1,4 @@
-"""Modul engine inpainting untuk CanvasGen.
-
-Menangani penggantian area gambar bermasker (inpaint), validasi dimensi mask,
-dan penyiapan pipeline inpainting.
-"""
+"""Inpainting Engine for CanvasGen supporting masked diffusion synthesis."""
 
 from typing import Any, Optional
 from PIL import Image
@@ -22,19 +18,14 @@ except ImportError:
 
 
 class InpaintPipeline:
-    """Pemroses inpainting yang mengelola sintesis gambar pada area bermasker."""
+    """Inpainting pipeline manager executing StableDiffusionInpaintPipeline."""
 
     def __init__(
         self,
         loader: Optional[ModelLoader] = None,
         settings: Optional[Settings] = None,
     ) -> None:
-        """Menginisialisasi InpaintPipeline dengan ModelLoader dan settings.
-
-        Args:
-            loader: Instance ModelLoader. Jika None, loader baru diinisialisasi.
-            settings: Instance Settings. Jika None, settings default digunakan.
-        """
+        """Initializes InpaintPipeline with ModelLoader singleton and Settings."""
         self.settings = settings or get_settings()
         self.loader = loader or ModelLoader(self.settings)
 
@@ -48,29 +39,19 @@ class InpaintPipeline:
         guidance_scale: Optional[float] = None,
         seed: Optional[int] = None,
     ) -> Image.Image:
-        """Mengganti isi area bermasker pada gambar dengan konten baru dari prompt.
+        """Replaces masked region of image using prompt and StableDiffusionInpaintPipeline.
 
-        Args:
-            image: Gambar dasar PIL Image.
-            mask_image: Masker grayscale PIL Image (putih = ganti, hitam = pertahankan).
-            prompt: Prompt teks deskripsi penggantian inpainting.
-            negative_prompt: Prompt panduan negatif.
-            num_inference_steps: Langkah sampling denoising.
-            guidance_scale: Pengali skala CFG.
-            seed: Seed acak integer opsional.
-
-        Returns:
-            Objek PIL Image hasil inpainting.
+        Raises:
+            RuntimeError: If execution fails or pipeline is unavailable.
         """
         if image.size != mask_image.size:
             logger.warning(
-                "Ukuran gambar %s tidak cocok dengan mask %s. Mengubah ukuran mask agar cocok.",
+                "Image size %s does not match mask size %s. Resizing mask.",
                 image.size,
                 mask_image.size,
             )
             mask_image = mask_image.resize(image.size, Image.Resampling.NEAREST)
 
-        # Ensure correct modes for image and mask
         if image.mode != "RGB":
             image = image.convert("RGB")
         if mask_image.mode not in ["L", "RGB"]:
@@ -81,18 +62,17 @@ class InpaintPipeline:
         cfg = guidance_scale or self.settings.default_guidance_scale
 
         logger.info(
-            "Mengeksekusi Inpainting [Prompt: '%s' | Steps: %d | CFG: %.1f | Seed: %d]",
+            "Executing Inpainting [Prompt: '%s' | Steps: %d | CFG: %.1f | Seed: %d]",
             prompt,
             steps,
             cfg,
             active_seed,
         )
 
-        pipe = self.loader.pipeline
+        pipe = self.loader.load_inpaint_pipeline()
 
-        # Eksekusi pipeline inpainting Diffusers jika objek pipeline riil
-        if TORCH_AVAILABLE and hasattr(pipe, "__call__") and not isinstance(pipe, str):
-            try:
+        try:
+            if hasattr(pipe, "__call__") and TORCH_AVAILABLE:
                 generator = torch.Generator(device=self.loader.device).manual_seed(active_seed)
                 output = pipe(
                     prompt=prompt,
@@ -103,11 +83,21 @@ class InpaintPipeline:
                     guidance_scale=cfg,
                     generator=generator,
                 )
-                logger.info("Eksekusi Inpainting Diffusers aktual berhasil.")
+                logger.info("Stable Diffusion Inpainting inference successful.")
                 return output.images[0]
-            except Exception as e:
-                logger.warning("Eksekusi Inpainting Diffusers aktual gagal (%s). Menggunakan komposisi mock.", e)
-
-        # Output placeholder inpainting (komposisi dasar)
-        result = image.copy()
-        return result
+            elif hasattr(pipe, "__call__"):
+                output = pipe(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    image=image,
+                    mask_image=mask_image,
+                    num_inference_steps=steps,
+                    guidance_scale=cfg,
+                )
+                logger.info("Stable Diffusion Inpainting inference successful.")
+                return output.images[0]
+            else:
+                raise RuntimeError("Stable Diffusion Inpaint pipeline is not callable.")
+        except Exception as e:
+            logger.error("Stable Diffusion Inpainting failed: %s", e)
+            raise e

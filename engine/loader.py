@@ -1,10 +1,6 @@
-"""Modul engine pemuat model (Model Loader) untuk CanvasGen.
+"""Centralized Model Loader for CanvasGen Hugging Face Diffusers Pipelines."""
 
-Mengelola pemuatan model Stable Diffusion, penempatan perangkat (cuda/cpu/mps),
-pemetaan presisi (fp16/fp32/bf16), token autentikasi HuggingFace,
-dan optimasi memori VRAM.
-"""
-
+import gc
 from typing import Any, Dict, Optional
 from config.settings import Settings, get_settings
 from utils.logger import get_logger
@@ -26,29 +22,50 @@ except ImportError:
 
 
 class ModelLoader:
-    """Pengelola pemuatan, penyiapan cache, dan pelepasan pipeline difusi."""
+    """Singleton model loader that caches and manages real Diffusers pipelines locally."""
+
+    _instance: Optional["ModelLoader"] = None
+
+    def __new__(cls, settings: Optional[Settings] = None) -> "ModelLoader":
+        """Ensures single global loader instance (Singleton pattern)."""
+        if cls._instance is None:
+            cls._instance = super(ModelLoader, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
-        """Menginisialisasi instance ModelLoader dengan konfigurasi settings.
+        """Initializes ModelLoader singleton."""
+        if getattr(self, "_initialized", False):
+            return
 
-        Args:
-            settings: Objek Settings opsional. Jika None, konfigurasi default akan digunakan.
-        """
         self.settings = settings or get_settings()
-        self.active_model_id: Optional[str] = None
+        self.active_model_id: str = "runwayml/stable-diffusion-v1-5"
+        self.inpaint_model_id: str = "runwayml/stable-diffusion-inpainting"
         self.pipeline: Optional[Any] = None
-        self.device: str = self.settings.device
-        self.precision: str = self.settings.precision
+        self.inpaint_pipeline: Optional[Any] = None
+        self.device: str = self._resolve_device()
+        self.precision: str = self._resolve_precision()
+        self._initialized = True
 
-    def _resolve_dtype(self, precision_str: str) -> Any:
-        """Memetakan string presisi menjadi torch.dtype."""
+    def _resolve_device(self) -> str:
+        """Detects hardware and resolves target device (CUDA GPU or CPU)."""
+        if TORCH_AVAILABLE and torch.cuda.is_available():
+            return "cuda"
+        logger.warning("Running on CPU. Generation may take several minutes.")
+        return "cpu"
+
+    def _resolve_precision(self) -> str:
+        """Resolves precision mode (fp16 for CUDA GPU, fp32 for CPU)."""
+        if self._resolve_device() == "cuda":
+            return "fp16"
+        return "fp32"
+
+    def _resolve_dtype(self) -> Any:
+        """Maps precision mode to PyTorch dtype."""
         if not TORCH_AVAILABLE:
             return None
-        p = precision_str.lower()
-        if p in ["fp16", "float16"]:
+        if self.precision == "fp16":
             return torch.float16
-        elif p in ["bf16", "bfloat16"]:
-            return torch.bfloat16
         return torch.float32
 
     def load_pipeline(
@@ -56,89 +73,131 @@ class ModelLoader:
         model_id: Optional[str] = None,
         device: Optional[str] = None,
         precision: Optional[str] = None,
-        use_auth_token: Optional[str] = None,
     ) -> Any:
-        """Memuat StableDiffusionPipeline atau pipeline difusi yang relevan.
+        """Loads and caches the primary Text-to-Image StableDiffusionPipeline.
 
-        Args:
-            model_id: ID repository HuggingFace atau jalur model lokal.
-            device: Perangkat target ('cuda', 'cpu', 'mps').
-            precision: Presisi data dtype ('fp16', 'fp32', 'bf16').
-            use_auth_token: Token autentikasi pengguna HuggingFace.
-
-        Returns:
-            Instance pipeline difusi yang dimuat atau objek fallback.
+        Raises:
+            RuntimeError: If PyTorch or Diffusers is unavailable, or model loading/download fails.
         """
-        target_model = model_id or self.settings.model_id
+        target_model = model_id or self.active_model_id
         target_device = device or self.device
         target_precision = precision or self.precision
-        auth_token = use_auth_token or self.settings.hf_token
+        self.precision = target_precision
+        dtype = self._resolve_dtype()
 
-        # Penyesuaian otomatis jika CUDA tidak tersedia
-        if TORCH_AVAILABLE and target_device == "cuda" and not torch.cuda.is_available():
-            logger.warning("CUDA tidak tersedia di sistem ini. Beralih ke CPU.")
-            target_device = "cpu"
+        # Return cached pipeline if already loaded
+        if self.pipeline is not None and self.active_model_id == target_model:
+            logger.info("Reusing cached Text-to-Image Diffusers pipeline: %s", target_model)
+            return self.pipeline
+
+        if not (DIFFUSERS_AVAILABLE and TORCH_AVAILABLE):
+            raise RuntimeError(
+                "PyTorch or Hugging Face Diffusers is not installed. Please install diffusers and torch."
+            )
 
         logger.info(
-            "Menyiapkan pemuatan pipeline [Model: '%s' | Perangkat: '%s' | Presisi: '%s']",
+            "Loading Stable Diffusion model [Model: '%s' | Device: '%s' | Precision: '%s']",
             target_model,
             target_device,
-            target_precision,
+            self.precision,
         )
 
-        torch_dtype = self._resolve_dtype(target_precision)
+        try:
+            kwargs: Dict[str, Any] = {}
+            if dtype is not None:
+                kwargs["torch_dtype"] = dtype
+            if not self.settings.safety_checker:
+                kwargs["safety_checker"] = None
 
-        if DIFFUSERS_AVAILABLE and TORCH_AVAILABLE:
-            try:
-                kwargs: Dict[str, Any] = {"torch_dtype": torch_dtype}
-                if auth_token:
-                    kwargs["use_auth_token"] = auth_token
-                if not self.settings.safety_checker:
-                    kwargs["safety_checker"] = None
+            logger.info("Downloading Stable Diffusion model...")
+            pipe = StableDiffusionPipeline.from_pretrained(target_model, **kwargs)
+            logger.info("Loading Stable Diffusion...")
+            pipe = pipe.to(target_device)
 
-                logger.info("Memuat StableDiffusionPipeline dari repo: %s", target_model)
-                pipe = StableDiffusionPipeline.from_pretrained(target_model, **kwargs)
-                pipe.to(target_device)
-
-                # Optimasi memori
+            # Enable Memory Optimizations on CUDA
+            if target_device == "cuda":
                 if hasattr(pipe, "enable_attention_slicing"):
                     pipe.enable_attention_slicing()
+                if hasattr(pipe, "enable_vae_slicing"):
+                    pipe.enable_vae_slicing()
 
-                self.pipeline = pipe
-                self.active_model_id = target_model
-                self.device = target_device
-                self.precision = target_precision
-                logger.info("Pipeline Diffusers '%s' berhasil dimuat ke perangkat %s.", target_model, target_device)
-                return self.pipeline
-            except Exception as e:
-                logger.warning("Pemuatan Diffusers aktual gagal/offline (%s). Menggunakan mode PipelineMock.", e)
+            self.pipeline = pipe
+            self.active_model_id = target_model
+            self.device = target_device
+            logger.info("Text-to-Image Stable Diffusion pipeline loaded successfully.")
+            return self.pipeline
+        except Exception as e:
+            logger.error("Failed to load StableDiffusionPipeline: %s", e)
+            raise RuntimeError(f"Unable to load Stable Diffusion model '{target_model}': {e}") from e
 
-        # Fallback mode jika Diffusers/PyTorch belum mengunduh model lokal
-        self.active_model_id = target_model
-        self.device = target_device
-        self.precision = target_precision
-        self.pipeline = f"PipelineMock[{target_model}]"
-        logger.info("Pipeline '%s' berhasil terdaftar (Mode Mock Engine).", target_model)
-        return self.pipeline
+    def load_inpaint_pipeline(self) -> Any:
+        """Loads and caches the StableDiffusionInpaintPipeline for inpainting and outpainting.
+
+        Raises:
+            RuntimeError: If PyTorch or Diffusers is unavailable, or model loading/download fails.
+        """
+        if self.inpaint_pipeline is not None:
+            logger.info("Reusing cached Inpaint pipeline: %s", self.inpaint_model_id)
+            return self.inpaint_pipeline
+
+        if not (DIFFUSERS_AVAILABLE and TORCH_AVAILABLE):
+            raise RuntimeError(
+                "PyTorch or Hugging Face Diffusers is not installed for Inpainting pipeline."
+            )
+
+        target_model = self.inpaint_model_id
+        target_device = self.device
+        dtype = self._resolve_dtype()
+
+        logger.info(
+            "Loading Inpaint pipeline [Model: '%s' | Device: '%s' | Precision: '%s']",
+            target_model,
+            target_device,
+            self.precision,
+        )
+
+        try:
+            kwargs: Dict[str, Any] = {}
+            if dtype is not None:
+                kwargs["torch_dtype"] = dtype
+            if not self.settings.safety_checker:
+                kwargs["safety_checker"] = None
+
+            logger.info("Downloading Stable Diffusion Inpainting model...")
+            pipe = StableDiffusionInpaintPipeline.from_pretrained(target_model, **kwargs)
+            logger.info("Loading Stable Diffusion Inpainting...")
+            pipe = pipe.to(target_device)
+
+            if target_device == "cuda":
+                if hasattr(pipe, "enable_attention_slicing"):
+                    pipe.enable_attention_slicing()
+                if hasattr(pipe, "enable_vae_slicing"):
+                    pipe.enable_vae_slicing()
+
+            self.inpaint_pipeline = pipe
+            logger.info("Inpaint Diffusers pipeline loaded successfully.")
+            return self.inpaint_pipeline
+        except Exception as e:
+            logger.error("Failed to load StableDiffusionInpaintPipeline: %s", e)
+            raise RuntimeError(f"Unable to load Stable Diffusion Inpaint model '{target_model}': {e}") from e
 
     def unload_pipeline(self) -> None:
-        """Melepaskan pipeline aktif dari memori perangkat dan menghapus referensi."""
-        if self.pipeline is not None:
-            logger.info("Melepaskan pipeline: '%s'", self.active_model_id)
-            self.pipeline = None
-            self.active_model_id = None
-        else:
-            logger.warning("Tidak ada pipeline aktif yang dapat dilepas.")
+        """Unloads pipelines and flushes CUDA VRAM and system memory."""
+        self.pipeline = None
+        self.inpaint_pipeline = None
+        if TORCH_AVAILABLE and torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
+        logger.info("Pipelines unloaded and CUDA memory flushed.")
 
     def get_info(self) -> Dict[str, Any]:
-        """Mengembalikan metadata mengenai pipeline aktif dan konfigurasi sistem.
-
-        Returns:
-            Dictionary berisi active_model_id, device, precision, dan status is_loaded.
-        """
+        """Returns metadata regarding active model loader state."""
         return {
             "active_model_id": self.active_model_id,
+            "inpaint_model_id": self.inpaint_model_id,
             "device": self.device,
             "precision": self.precision,
             "is_loaded": self.pipeline is not None,
+            "is_txt2img_loaded": self.pipeline is not None,
+            "is_inpaint_loaded": self.inpaint_pipeline is not None,
         }

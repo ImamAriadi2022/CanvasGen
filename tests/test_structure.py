@@ -16,6 +16,7 @@ REQUIRED_DIRECTORIES = [
     "tests",
     "docs",
     "scripts",
+    "submit",
 ]
 
 REQUIRED_FILES = [
@@ -37,14 +38,26 @@ REQUIRED_FILES = [
     "utils/seed.py",
     "utils/logger.py",
     "utils/file_manager.py",
+    "scripts/setup_env.bat",
+    "scripts/setup_env.sh",
+    "scripts/run_app.bat",
+    "scripts/run_app.sh",
+    "scripts/run_tests.py",
     "tests/test_imports.py",
     "tests/test_structure.py",
     "tests/test_smoke.py",
     "tests/test_stage2_engine.py",
+    "notebooks/local_demo.ipynb",
     "notebooks/colab.ipynb",
     "docs/Architecture.md",
     "docs/Development.md",
     "docs/Workflow.md",
+    "docs/Submission.md",
+    "submit/Pipeline_submission_BFGAI_Imam.ipynb",
+    "submit/Streamlit_submission_BFGAI_Imam.ipynb",
+    "submit/requirements.txt",
+    "submit/README.md",
+    "submit/submission_checklist.md",
 ]
 
 

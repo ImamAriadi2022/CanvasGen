@@ -1,6 +1,7 @@
-"""Smoke test suite for CanvasGen core functionality."""
+"""Smoke test suite for CanvasGen core functionality using real Diffusers integration with mock pretrained loaders."""
 
 import unittest
+from unittest.mock import MagicMock, patch
 from PIL import Image
 
 from config.settings import get_settings
@@ -12,6 +13,21 @@ from services.generation_service import GenerationService
 from utils.image import create_image_grid, image_to_base64, resize_image
 from utils.memory import flush_vram, get_ram_usage, get_vram_usage
 from utils.seed import set_seed
+
+
+def create_dummy_diffusers_pipeline(*args, **kwargs):
+    """Creates a mock Diffusers pipeline instance returning PIL images on call."""
+    mock_pipe = MagicMock()
+    mock_pipe.to.return_value = mock_pipe
+    mock_pipe.enable_attention_slicing = MagicMock()
+    mock_pipe.enable_vae_slicing = MagicMock()
+
+    dummy_image = Image.new("RGB", (512, 512), color=(50, 100, 150))
+    output_obj = type("DiffusersOutput", (), {"images": [dummy_image]})()
+    mock_pipe.side_effect = lambda *a, **k: output_obj
+    mock_pipe.return_value = output_obj
+    mock_pipe.scheduler = MagicMock()
+    return mock_pipe
 
 
 class TestSmoke(unittest.TestCase):
@@ -54,11 +70,12 @@ class TestSmoke(unittest.TestCase):
         b64 = image_to_base64(img1)
         self.assertTrue(b64.startswith("data:image/png;base64,"))
 
-    def test_engine_skeleton_flow(self):
+    @patch("engine.loader.ModelLoader.load_pipeline", side_effect=create_dummy_diffusers_pipeline)
+    def test_engine_skeleton_flow(self, mock_load):
         """Smoke test engine generation flow."""
         loader = ModelLoader()
-        loader_info = loader.load_pipeline()
-        self.assertIsNotNone(loader_info)
+        pipe = loader.load_pipeline()
+        self.assertIsNotNone(pipe)
 
         generator = ImageGenerator(loader=loader)
         img = generator.generate(prompt="Test prompt", seed=42)
@@ -78,7 +95,8 @@ class TestSmoke(unittest.TestCase):
         self.assertEqual(mask.size, (300, 300))
         self.assertEqual(mask.mode, "L")
 
-    def test_generation_service_end_to_end(self):
+    @patch("engine.loader.ModelLoader.load_pipeline", side_effect=create_dummy_diffusers_pipeline)
+    def test_generation_service_end_to_end(self, mock_load):
         """Smoke test generation service API execution."""
         service = GenerationService()
         img, path = service.generate_text_to_image(

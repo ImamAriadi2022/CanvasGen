@@ -1,10 +1,10 @@
-# Panduan Pengembang CanvasGen
+# Panduan Pengembang Lokal CanvasGen
 
-Panduan ini mejelaskan setup lingkungan, panduan pengembangan lokal, standar penulisan kode, instruksi pengujian, dan prosedur kontrol kualitas untuk pengembang yang bekerja pada proyek **CanvasGen**.
+Panduan ini menjelaskan setup lingkungan lokal, panduan pengembangan lokal, standar penulisan kode, instruksi pengujian, dan prosedur kontrol kualitas untuk pengembang yang bekerja pada proyek **CanvasGen**.
 
 ---
 
-## 1. Prasyarat & Setup Lingkungan
+## 1. Prasyarat & Setup Lingkungan Lokal
 
 ### Persyaratan Sistem
 - **Python**: Versi 3.9, 3.10, atau 3.11
@@ -13,7 +13,7 @@ Panduan ini mejelaskan setup lingkungan, panduan pengembangan lokal, standar pen
 
 ### Langkah Setup Cepat
 
-1. **Klon repository**:
+1. **Clone the repository**:
    ```bash
    git clone https://github.com/ImamAriadi2022/CanvasGen.git
    cd CanvasGen
@@ -49,7 +49,7 @@ streamlit run app.py
 
 ## 3. Menjalankan Pengujian Otomatis
 
-Jalankan seluruh suite pengujian pytest:
+Jalankan seluruh suite pengujian pytest / unittest:
 ```bash
 pytest tests/ -v
 ```

@@ -1,4 +1,4 @@
-# 🎨 CanvasGen - Engine Generasi Gambar Berbasis AI
+# 🎨 CanvasGen - Engine Generasi Gambar Berbasis AI (Pengembangan 100% Lokal)
 
 **CanvasGen** adalah platform Generasi Gambar AI modular dan siap produksi yang dibangun menggunakan Python. Dirancang untuk skalabilitas, performa tinggi, dan pengalaman pengguna yang mulus, CanvasGen mendukung sintesis Text-to-Image, generasi batch multi-sampel, komparasi scheduler noise secara langsung, inpainting presisi, outpainting vertikal/horizontal, serta aplikasi web interaktif berbasis Streamlit.
 
@@ -25,7 +25,7 @@ CanvasGen/
 │   ├── generator.py            # Engine text-to-image & batch ImageGenerator
 │   ├── scheduler.py            # Suite komparator sampler SchedulerManager
 │   ├── inpaint.py              # Sintesis gambar bermasker InpaintPipeline
-│   └── outpaint.py             # Pemroses ekspansi kanvas OutpaintPipeline
+│   └── outpaint.py             # Pemproses ekspansi kanvas OutpaintPipeline
 ├── services/                   # Lapisan fasad integrasi layanan
 │   ├── __init__.py
 │   └── generation_service.py   # Koordinator layanan generasi tingkat tinggi
@@ -39,12 +39,13 @@ CanvasGen/
 ├── assets/                     # Direktori aset visual bawaan
 ├── outputs/                    # Direktori output untuk hasil gambar generasi
 ├── notebooks/                  # Lingkungan notebook interaktif
-│   └── colab.ipynb             # Notebook setup Google Colab yang siap dieksekusi
+│   └── local_demo.ipynb        # Notebook demo & verifikasi eksekusi lokal
 ├── tests/                      # Suite pengujian unit dan pengujian asap otomatis
 │   ├── __init__.py
 │   ├── test_imports.py         # Verifikasi impor modul
 │   ├── test_structure.py       # Verifikasi keberadaan file dan direktori
-│   └── test_smoke.py           # Pengujian asap logika inti
+│   ├── test_smoke.py           # Pengujian asap logika inti
+│   └── test_stage2_engine.py   # Suite pengujian unit Tahap 2
 ├── docs/                       # Dokumentasi pengembang
 │   ├── Architecture.md         # Desain sistem detail & alur data
 │   ├── Development.md          # Setup & panduan coding
@@ -83,7 +84,7 @@ chmod +x scripts/setup_env.sh
 
 ---
 
-## 💻 Alur Kerja Pengembang
+## 💻 Alur Kerja Pengembang Lokal
 
 ### Menjalankan Aplikasi Web Streamlit
 ```bash
@@ -101,26 +102,11 @@ pytest tests/ -v
 
 ---
 
-## ☁️ Eksekusi Google Colab
-
-CanvasGen menyediakan notebook setup Google Colab otomatis di `notebooks/colab.ipynb`.
-
-1. Buka Google Colab dan unggah `notebooks/colab.ipynb`.
-2. Pilih Akselerator Hardware GPU di bawah menu `Runtime -> Change runtime type -> T4 GPU`.
-3. Jalankan seluruh sel secara berurutan dari atas ke bawah. Notebook secara otomatis akan:
-   - Menghubungkan Google Drive (`/content/drive/MyDrive/CanvasGen`).
-   - Melakukan klon atau menarik pembaruan repository.
-   - Memasang seluruh dependensi dari `requirements.txt`.
-   - Memeriksa akselerasi GPU, versi driver CUDA, VRAM, dan RAM Sistem.
-   - Menjalankan pengujian otomatis pytest.
-
----
-
 ## 🗺️ Fitur Masa Depan & Rencana Pengembangan
 
-- **Tahap 1 (Selesai)**: Desain arsitektur, struktur direktori, skeleton modul, paket utilitas, suite pengujian, dan integrasi Google Colab.
-- **Tahap 2 (Mendatang)**: Integrasi PyTorch & HuggingFace Diffusers, eksekusi Text-to-Image, generasi batch multi-sampel, pergantian scheduler secara langsung, inpainting, dan outpainting.
-- **Tahap 3 (Mendatang)**: Kontrol UI Streamlit tingkat lanjut, galeri gambar, riwayat prompt, pemuatan LoRA, integrasi ControlNet, dan pengelola unduhan model.
+- **Tahap 1 (Selesai)**: Desain arsitektur, struktur direktori, modul settings, paket utilitas, suite pengujian unit.
+- **Tahap 2 (Selesai)**: Integrasi PyTorch & HuggingFace Diffusers, eksekusi Text-to-Image, generasi batch multi-sampel, pergantian scheduler secara langsung, inpainting, dan outpainting.
+- **Tahap 3 (Mendatang)**: Kontrol UI Streamlit tingkat lanjut, galeri gambar visual, riwayat prompt, pemuatan LoRA, integrasi ControlNet, dan pengelola unduhan model.
 
 ---
 

@@ -1,4 +1,4 @@
-# Alur Kerja Git & Tahapan Staging CanvasGen
+# Alur Kerja Git & Tahapan Staging CanvasGen (Pengembangan 100% Lokal)
 
 Dokumen ini menjelaskan strategi branching Git, panduan kontribusi, integrasi QA otomatis, dan roadmap pengembangan multi-tahap untuk **CanvasGen**.
 
@@ -31,15 +31,13 @@ Seluruh commit wajib mengikuti format Conventional Commits:
 ```mermaid
 timeline
     title Roadmap Tahapan CanvasGen
-    Tahap 1 : Arsitektur Utama & Skeleton : Kebutuhan & Lingkungan : Suite Pengujian & Verifikasi : Setup Google Colab
+    Tahap 1 : Arsitektur Utama & Skeleton : Kebutuhan & Lingkungan Lokal : Suite Pengujian & Verifikasi
     Tahap 2 : Integrasi Diffusers : Generasi Text-to-Image : Generasi Batch & Komparasi Scheduler : Engine Inpainting & Outpainting
     Tahap 3 : UI Lengkap Streamlit : Progress Bar & Galeri Gambar : Pengunduh Model & Pengelola Preset : Pengemasan Final & Rilis
 ```
 
 ### Daftar Periksa Kesiapan Transisi Tahap
 
-Untuk bertransisi dari Tahap 1 ke Tahap 2:
-- [x] Seluruh skeleton modul engine utama telah didefinisikan dengan PEP8, type hints, dan docstring.
-- [x] Suite pengujian unit lulus dengan tingkat keberhasilan 100% pada impor, struktur direktori, dan pengujian asap.
-- [x] Manajemen konfigurasi memuat file `.env` dengan bersih.
-- [x] Notebook Google Colab (`colab.ipynb`) telah dibuat dan diverifikasi.
+- [x] Tahap 1: Arsitektur utama, skeleton modul, utilitas, dan suite pengujian dasar terverifikasi.
+- [x] Tahap 2: Integrasi Diffusers, Text-to-Image, Batching, Scheduler Swapping, Inpainting, Outpainting, dan 19 pengujian unit lulus 100%.
+- [ ] Tahap 3: Penyempurnaan antarmuka visual Streamlit UI penuh.
