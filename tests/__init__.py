@@ -1,0 +1,1 @@
+"""CanvasGen test suite initialization."""

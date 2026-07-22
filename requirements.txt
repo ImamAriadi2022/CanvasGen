@@ -1,0 +1,23 @@
+# Core Framework & Machine Learning
+torch>=2.0.0
+torchvision>=0.15.0
+diffusers>=0.25.0
+transformers>=4.36.0
+accelerate>=0.25.0
+safetensors>=0.4.0
+
+# User Interface
+streamlit>=1.30.0
+
+# Configuration & Environment
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+
+# Image Processing & Utilities
+Pillow>=10.0.0
+numpy>=1.24.0
+psutil>=5.9.0
+
+# Testing & QA
+pytest>=7.4.0
