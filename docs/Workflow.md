@@ -1,23 +1,23 @@
-# CanvasGen Git & Staging Workflow
+# Alur Kerja Git & Tahapan Staging CanvasGen
 
-This document outlines the Git branching strategy, contribution guidelines, automated QA integration, and multi-stage development roadmap for **CanvasGen**.
-
----
-
-## 1. Git Branching Strategy
-
-CanvasGen follows GitFlow branching rules:
-
-- **`main`**: Production stable releases. All commits must be tagged with semver (e.g. `v1.0.0`).
-- **`develop`**: Integration branch for upcoming releases and stage milestones.
-- **`feature/<feature-name>`**: Dedicated feature branches branched from `develop` (e.g., `feature/inpainting-ui`).
-- **`bugfix/<issue-name>`**: Bugfix branches targeting specific issues.
+Dokumen ini menjelaskan strategi branching Git, panduan kontribusi, integrasi QA otomatis, dan roadmap pengembangan multi-tahap untuk **CanvasGen**.
 
 ---
 
-## 2. Commit Message Standards
+## 1. Strategi Branching Git
 
-All commits must follow Conventional Commits format:
+CanvasGen mengikuti alur kerja branching GitFlow:
+
+- **`main`**: Rilis stabil produksi. Seluruh commit harus diberi tag versi semver (misalnya `v1.0.0`).
+- **`develop`**: Branch integrasi untuk rilis mendatang dan pencapaian milestone tahap.
+- **`feature/<nama-fitur>`**: Branch fitur khusus yang dibuat dari `develop` (misalnya `feature/inpainting-ui`).
+- **`bugfix/<nama-masalah>`**: Branch perbaikan bug yang menargetkan masalah tertentu.
+
+---
+
+## 2. Standar Pesan Commit
+
+Seluruh commit wajib mengikuti format Conventional Commits:
 
 - `feat: add DPMSolver scheduler support`
 - `fix: resolve VRAM memory leak on batch generation`
@@ -26,20 +26,20 @@ All commits must follow Conventional Commits format:
 
 ---
 
-## 3. Multi-Stage Development Roadmap
+## 3. Roadmap Pengembangan Multi-Tahap
 
 ```mermaid
 timeline
-    title CanvasGen Staging Roadmap
-    Stage 1 : Core Architecture & Skeleton : Requirements & Environment : Test & Verification Suite : Google Colab Setup
-    Stage 2 : Diffusers Integration : Text-to-Image Generation : Batching & Scheduler Comparison : Inpainting & Outpainting Engines
-    Stage 3 : Streamlit Full UI : Live Progress Bar & Gallery : Model Downloader & Preset Manager : Final Packaging & Deployment
+    title Roadmap Tahapan CanvasGen
+    Tahap 1 : Arsitektur Utama & Skeleton : Kebutuhan & Lingkungan : Suite Pengujian & Verifikasi : Setup Google Colab
+    Tahap 2 : Integrasi Diffusers : Generasi Text-to-Image : Generasi Batch & Komparasi Scheduler : Engine Inpainting & Outpainting
+    Tahap 3 : UI Lengkap Streamlit : Progress Bar & Galeri Gambar : Pengunduh Model & Pengelola Preset : Pengemasan Final & Rilis
 ```
 
-### Stage Transition Readiness Checklist
+### Daftar Periksa Kesiapan Transisi Tahap
 
-To transition from Stage 1 to Stage 2:
-- [x] All core engine module skeletons defined with PEP8, type hints, and docstrings.
-- [x] Unit test suite passing with 100% success rate on imports, directory structure, and smoke tests.
-- [x] Settings management loading cleanly from `.env`.
-- [x] Google Colab notebook (`colab.ipynb`) created and verified.
+Untuk bertransisi dari Tahap 1 ke Tahap 2:
+- [x] Seluruh skeleton modul engine utama telah didefinisikan dengan PEP8, type hints, dan docstring.
+- [x] Suite pengujian unit lulus dengan tingkat keberhasilan 100% pada impor, struktur direktori, dan pengujian asap.
+- [x] Manajemen konfigurasi memuat file `.env` dengan bersih.
+- [x] Notebook Google Colab (`colab.ipynb`) telah dibuat dan diverifikasi.

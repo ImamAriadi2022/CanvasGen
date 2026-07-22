@@ -1,45 +1,45 @@
 #!/usr/bin/env bash
-# CanvasGen Linux/macOS Environment Setup Script
+# Script Setup Lingkungan Linux/macOS CanvasGen
 
 set -e
 
 echo "========================================================="
-echo "             CanvasGen Environment Setup                 "
+echo "             Setup Lingkungan CanvasGen                  "
 echo "========================================================="
 
-# Check Python 3
+# Periksa python3
 if ! command -v python3 &> /dev/null; then
-    echo "[ERROR] python3 could not be found. Please install Python 3.9+."
+    echo "[ERROR] python3 tidak ditemukan. Silakan pasang Python 3.9+."
     exit 1
 fi
 
-# Create virtual environment
+# Buat virtual environment
 if [ ! -d "venv" ]; then
-    echo "[INFO] Creating Python virtual environment in ./venv..."
+    echo "[INFO] Membuat Python virtual environment di ./venv..."
     python3 -m venv venv
 else
-    echo "[INFO] Virtual environment ./venv already exists."
+    echo "[INFO] Virtual environment ./venv sudah ada."
 fi
 
-# Activate virtual environment
-echo "[INFO] Activating virtual environment..."
+# Aktifkan virtual environment
+echo "[INFO] Mengaktifkan virtual environment..."
 source venv/bin/activate
 
-echo "[INFO] Upgrading pip..."
+echo "[INFO] Memperbarui pip..."
 pip install --upgrade pip --quiet
 
-echo "[INFO] Installing requirements from requirements.txt..."
+echo "[INFO] Memasang dependensi dari requirements.txt..."
 pip install -r requirements.txt
 
-# Copy .env.example if missing
+# Salin .env.example jika belum ada
 if [ ! -f ".env" ]; then
-    echo "[INFO] Creating .env from .env.example..."
+    echo "[INFO] Menyalin .env.example ke .env..."
     cp .env.example .env
 fi
 
 echo "========================================================="
-echo "[SUCCESS] CanvasGen Environment setup complete!"
-echo "To activate environment run: source venv/bin/activate"
-echo "To run tests run: python scripts/run_tests.py"
-echo "To run Streamlit app run: streamlit run app.py"
+echo "[SUKSES] Setup lingkungan CanvasGen selesai!"
+echo "Untuk mengaktifkan venv jalankan: source venv/bin/activate"
+echo "Untuk menjalankan pengujian jalankan: python scripts/run_tests.py"
+echo "Untuk menjalankan aplikasi web jalankan: streamlit run app.py"
 echo "========================================================="

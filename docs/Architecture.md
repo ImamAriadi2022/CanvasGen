@@ -1,64 +1,64 @@
-# CanvasGen Architecture Documentation
+# Dokumentasi Arsitektur CanvasGen
 
-This document describes the high-level architecture, module breakdown, and data flow of the **CanvasGen** AI Image Generation platform.
+Dokumen ini menjelaskan arsitektur tingkat tinggi, rincian modul, dan alur data dari platform Generasi Gambar AI **CanvasGen**.
 
 ---
 
-## 1. System Overview
+## 1. Gambaran Umum Sistem
 
-CanvasGen is designed following **SOLID** principles, modular architecture, and layered separation of concerns. The platform decouples machine learning pipeline loading, image synthesis execution, hardware resource management, and user interfaces.
+CanvasGen dirancang mengikuti prinsip **SOLID**, arsitektur modular, dan pemisahan tanggung jawab berlapis. Platform ini memisahkan pemuatan pipeline machine learning, eksekusi sintesis gambar, manajemen sumber daya hardware, dan antarmuka pengguna.
 
 ```mermaid
 graph TD
-    UI[Streamlit App / app.py] --> Service[GenerationService / services]
+    UI[Aplikasi Streamlit / app.py] --> Service[GenerationService / services]
     Service --> Loader[ModelLoader / engine]
     Service --> Generator[ImageGenerator / engine]
     Service --> Scheduler[SchedulerManager / engine]
     Service --> Inpaint[InpaintPipeline / engine]
     Service --> Outpaint[OutpaintPipeline / engine]
     
-    Generator --> Seed[Seed Utils / utils.seed]
-    Generator --> Memory[Memory Utils / utils.memory]
-    Generator --> Logger[Logger / utils.logger]
+    Generator --> Seed[Utilitas Seed / utils.seed]
+    Generator --> Memory[Utilitas Memori / utils.memory]
+    Generator --> Logger[Pencatat Log / utils.logger]
     
     Inpaint --> Loader
     Outpaint --> Inpaint
     
     Service --> FileManager[FileManager / utils.file_manager]
-    Service --> Settings[Config Settings / config.settings]
+    Service --> Settings[Konfigurasi Settings / config.settings]
 ```
 
 ---
 
-## 2. Core Modules & Component Responsibilities
+## 2. Modul Utama & Tanggung Jawab Komponen
 
-### 2.1 Configuration Layer (`config/`)
-- **`settings.py`**: Centralized configuration powered by `pydantic-settings.BaseSettings`. Loads variables from `.env` with fallback default values and type validation.
+### 2.1 Lapisan Konfigurasi (`config/`)
+- **`settings.py`**: Konfigurasi terpusat ditenagai oleh `pydantic-settings.BaseSettings` / `dataclass`. Memuat variabel dari `.env` dengan nilai default fallback dan validasi tipe data.
 
-### 2.2 Core Engine Layer (`engine/`)
-- **`loader.py` (`ModelLoader`)**: Manages model checkpoint loading from HuggingFace Hub or local cache, handles device allocation (`cuda`, `cpu`), floating point precision (`fp16`, `fp32`), and HF authentication tokens.
-- **`generator.py` (`ImageGenerator`)**: Orchestrates Text-to-Image synthesis and multi-image batch generation with seed sequence tracking.
-- **`scheduler.py` (`SchedulerManager`)**: Manages noise sampler selection (DPM-Solver++, Euler Discrete, DDIM, LMS) and multi-scheduler quality comparisons.
-- **`inpaint.py` (`InpaintPipeline`)**: Handles masked region image replacement and mask format validation.
-- **`outpaint.py` (`OutpaintPipeline`)**: Manages directional canvas padding expansion and mask creation for seamless background extensions.
+### 2.2 Lapisan Engine Utama (`engine/`)
+- **`loader.py` (`ModelLoader`)**: Mengelola pemuatan checkpoint model dari HuggingFace Hub atau cache lokal, menangani alokasi perangkat (`cuda`, `cpu`), presisi floating point (`fp16`, `fp32`), dan token autentikasi HF.
+- **`generator.py` (`ImageGenerator`)**: Mengorkestrasi sintesis Text-to-Image dan generasi batch multi-gambar dengan pelacakan urutan seed deterministik.
+- **`scheduler.py` (`SchedulerManager`)**: Mengelola pemilihan noise sampler (DPM-Solver++, Euler Discrete, DDIM, LMS) dan pengujian perbandingan kualitas multi-scheduler.
+- **`inpaint.py` (`InpaintPipeline`)**: Menangani penggantian area gambar bermasker dan validasi format mask.
+- **`outpaint.py` (`OutpaintPipeline`)**: Menangani perluasan padding kanvas dan pembuatan mask untuk perpanjangan latar belakang secara mulus.
 
-### 2.3 Service Layer (`services/`)
-- **`generation_service.py` (`GenerationService`)**: Unified facade encapsulating engine loaders, generators, and file persistence for UI and API endpoints.
+### 2.3 Lapisan Layanan (`services/`)
+- **`generation_service.py` (`GenerationService`)**: Fasad terpadu yang membungkus loader engine, generator, dan penyimpanan file untuk antarmuka pengguna dan API.
 
-### 2.4 Utility Layer (`utils/`)
-- **`image.py`**: PIL Image resizing, aspect ratio math, grid composition, Base64 conversion.
-- **`memory.py`**: PyTorch CUDA VRAM cleanup (`torch.cuda.empty_cache()`) and system RAM diagnostic tools.
-- **`seed.py`**: Global deterministic seed setter for `random`, `numpy`, and `torch`.
-- **`logger.py`**: Structured logging configuration with file and console appenders.
-- **`file_manager.py`**: Safe timestamped filename generation and directory creation.
+### 2.4 Lapisan Utilitas (`utils/`)
+- **`image.py`**: Resizing gambar PIL, matematika rasio aspek, penyusunan grid gambar, konversi Base64.
+- **`memory.py`**: Pembersihan VRAM PyTorch CUDA (`torch.cuda.empty_cache()`) dan alat diagnosa RAM sistem.
+- **`seed.py`**: Pengatur seed deterministik global untuk `random`, `numpy`, dan `torch`.
+- **`logger.py`**: Konfigurasi pencatatan log terstruktur dengan pencatat konsol dan file.
+- **`file_manager.py`**: Pembuatan nama file berstempel waktu dan manajemen direktori secara aman.
 
 ---
 
-## 3. Data Flow Execution
+## 3. Alur Eksekusi Data
 
-1. **User Request**: User interacts with `app.py` UI or invokes `GenerationService`.
-2. **Configuration Validation**: `Settings` validates target dimensions, CFG scale, and step bounds.
-3. **Seed Enforcement**: `utils.seed.set_seed()` sets random state across standard libraries.
-4. **Pipeline Retrieval**: `ModelLoader` yields active PyTorch / Diffusers pipeline instance.
-5. **Generation**: `ImageGenerator` executes denoising loop.
-6. **Artifact Output & Cleanup**: Generated PIL image is formatted by `utils.file_manager`, saved to `outputs/`, and `utils.memory.flush_vram()` releases unreferenced CUDA tensors.
+1. **Permintaan Pengguna**: Pengguna berinteraksi dengan UI `app.py` atau memanggil `GenerationService`.
+2. **Validasi Konfigurasi**: `Settings` memvalidasi dimensi target, skala CFG, dan batas langkah iterasi.
+3. **Penerapan Seed**: `utils.seed.set_seed()` menetapkan status acak pada seluruh pustaka standar.
+4. **Pengambilan Pipeline**: `ModelLoader` menyerahkan instance pipeline PyTorch / Diffusers yang aktif.
+5. **Generasi**: `ImageGenerator` mengeksekusi loop denoiser.
+6. **Output Artefak & Pembersihan**: Gambar PIL yang dihasilkan diformat oleh `utils.file_manager`, disimpan ke `outputs/`, dan `utils.memory.flush_vram()` melepaskan tensor CUDA yang tidak lagi direferensikan.
